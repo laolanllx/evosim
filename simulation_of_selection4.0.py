@@ -8,7 +8,7 @@ import numpy as np
 # ================================================
 # Functions
 # ================================================
-def select_paraents(n):
+def select_parents(n):
 	"""
 	Args:
 		n: (int) number of individuals in the population
@@ -30,8 +30,6 @@ def add_new_mutation(population, n, u, nummuts):
 	# randomly select which individual and which position has mutation 
 	row = np.random.randint(0, n, size = nummuts) # list of row indexs
 	col = np.random.randint(0, u, size = nummuts) # list of column indexs
-	# for i in range(nummuts):
-	# 	population[row[i]][col[i]] += 1
 	# Fancy Indexing
 	population[row, col] += 1
 	return population
@@ -42,7 +40,9 @@ def check_site(population, u, fixnum):
 	Args:
 		population: (numpy.ndarray) shape n*u, n individuals and u sites
 	Returns:
-		None
+		population: (numpy.ndarray) shape n*u, n individuals and u sites
+		fixnum: number of mutaiton got fixed
+		index: index of fixed columns
 	"""
 	_, col = np.where(population == 0)  # find columns that contain 0 i.e. no mutation
 	if col.size > 0:
@@ -64,7 +64,7 @@ def check_site(population, u, fixnum):
 
 n, u = 100, 10
 g = 100*n
-v = 0.0001
+v = 0.01
 
 # create a n*u array, each row is one individual, each column is one site for each mutation
 population = np.zeros([n, u], dtype=int)
@@ -76,10 +76,8 @@ totalmuts = 0
 fix_num = 0
 time = []
 
-help(np.random.poisson())
-
 while i <= g:
-	offspring = population[select_paraents(n)]
+	offspring = population[select_parents(n)]
 	# nummuts = np.random.randint(v*n*u)
 	nummuts = np.random.poisson(v*n*u) # expected number of mutations in population each generation
 	totalmuts += nummuts
@@ -105,11 +103,11 @@ len(time)
 np.sum(time)/fix_num
 
 totalmuts
-fix_num
+fix_num/g
 fix_num/totalmuts
 population
-1/n*5
-
+1/(n*2)
+1/n
 
 # ================================================
 # Part 2
@@ -134,16 +132,33 @@ def new_offspring(population, n, u, s):
 	# 1.1 read beneficial column, find non-zero element => index
 	ben_cols = population[:, u:]
 	rows, _ = np.where(ben_cols!=0)
-	rows, occurrence = np.unique(rows, return_counts=True)
 	if rows.size > 0:
 		# 1.2 modify p 
-		p[rows] *= [(1+s)**i for i in occurrence]
+		p[rows] += s
 		# 1.3 normalization (to sum up to 1)
 		p = p / np.sum(p)
 		return np.random.choice(np.arange(n), size = n, p = p)
 	else:
 		return np.random.choice(np.arange(n), size = n)
 
+def add_new_mutation_b(population, n, u, nummuts):
+	"""
+	Args:
+		population: (numpy.ndarray) shape n*u, n individuals and u sites
+		n: (int) number of individuals in the population
+		u: (int) number of sites subject to mutations in each individual
+	Returns:
+		population: (numpy.ndarray)
+	"""
+	# randomly select which individual and which position has mutation 
+	row = np.random.randint(0, n, size = nummuts) # list of row indexs
+	col = np.random.randint(0, u, size = nummuts) # list of column indexs
+	b_muts = 0
+	for i in col:
+		if i == (u-1):
+			b_muts += 1
+	population[row, col] += 1
+	return population, b_muts
 
 def check_beneficial_mutation(population, u):
 	"""
@@ -153,49 +168,89 @@ def check_beneficial_mutation(population, u):
 	Returns:
 		index of beneficial mutation column for fixation or loss, start from 0
 	"""
-	ben_cols = population[:, u:] 
+	ben_cols = population[:, u:]
+	n = population.shape[0]  # number of rows i.e. individuals  
 	# 1. fixation: column all non-zero
 	# 2. loss: column all zero
 	check_matrix = ben_cols != 0 # if the site not equal to zero, return True; else ruturn False
 	check_sum = np.sum(check_matrix, axis=0) # count number of True for each columns (beneficial mutation)
-	fix_col = np.where(check_sum==10)[0]  # fixation 
-	los_col = np.where(check_sum==0)[0]   # loss
-	return fix_col, los_col 
+	fix_col = np.where(check_sum==n)[0]  # fixation column index
+	los_col = np.where(check_sum==0)[0]   # loss column index
+	if fix_col.size > 0:
+		population[:, fix_col+u] = 0
+	return population, fix_col, los_col
 
 
 # ================================================
 # selection coefficient s
 # ================================================
-s = 0.1
-# time for beneficial muation got fixed or lost:
-# there should be 10 beneficial mutation for 100*N generations
-# shape 10*2, first column is fixation time, second column is loss time
-time_to_fix_or_loss_b = np.zeros([10,2], dtype=int)
-time_to_fix_or_loss_b
-b = 0 # number of beneficial mutations
-j = 1
 
-while j < g:
-	#  every 10*N generations add a new beneficial mutation
-	if j % (10*n) == 0:
-		b += 1
-		new_position = np.zeros(n, dtype = int)
-		population = np.column_stack((population,new_position)) # add a new column for a beneficial mutation site
-	num_muts = np.random.poisson(v*n*(u+b)) # expected number of mutations in population each generation
-	add_ben_population = add_new_mutation(population, n, u+b, num_muts) # add mutation
-	if b > 0: # population contains beneficial mutaion
-		offspring = add_ben_population[new_offspring(add_ben_population, n, u, s)]
-		fix_col, los_col = check_beneficial_mutation(offspring, u)
-		if fix_col != 'NAN':
-			time_to_fix_or_loss_b[fix_col, 0] = j # add time for beneficial muation got fixed
-		elif los_col != 'NAN':
-			time_to_fix_or_loss_b[los_col, 1] = j # add time for beneficial muation got lost 
-		population = offspring
-	else: 
-		offspring = add_ben_population[select_paraents(n)]
-		population = offspring
-	j += 1
-time_to_fix_or_loss_b
+diff_s = np.array([0.01, 0.05, 0.1, 0.5, 0.8, 1, 2])
+diff_s
+
+list_p_fix = []
+list_p_loss = []
+for s in diff_s:
+	# 1. add first beneficial mutation
+	# 1.1 # add a new column for the first beneficial mutation site
+	first_beneficial_site = np.zeros(n, dtype = int)
+	# 1.2 add it into population
+	pop = np.column_stack((population, first_beneficial_site))
+	b = 1 # number of total beneficial mutations
+	j = 1
+	time_to_fix = {}
+	time_to_loss = {}
+	total_b_muts = 0
+	while j <= g:
+		# 1.3 add mutations;
+		num_muts = np.random.poisson(v*n*(u+b)) # expected number of mutations in population each generation
+		add_mutation_pop, b_muts = add_new_mutation_b(pop, n, u+b, num_muts)
+		total_b_muts += b_muts
+		# 2. get offspring for next generation;
+		offspring = add_mutation_pop[new_offspring(add_mutation_pop, n, u+b-1, s)]
+		# 2.1 use check function to figure when it got fixed or lost; if it did, convert that column into 0 and 
+		pop, fix_col, los_col = check_beneficial_mutation(offspring, u+b-1)
+		# 2.2 record its time;
+		# if b_muts > 0 and fix_col.size > 0:
+		if fix_col.size > 0:
+			time_to_fix[b] = j # add time for beneficial muation got fixed
+			# 2.3 add another beneficial site into population;
+			new_beneficial_site = np.zeros(n, dtype = int)
+			pop = np.column_stack((pop, new_beneficial_site))
+			b += 1
+		elif b_muts > 0 and los_col.size > 0:
+		# elif los_col.size > 0:
+			time_to_loss[b] = j # add time for beneficial muation got lost 
+			# 2.3 add another beneficial site into population;
+			new_beneficial_site = np.zeros(n, dtype = int)
+			pop = np.column_stack((pop, new_beneficial_site))
+			b += 1
+		j += 1
+	prob_of_fix = len(time_to_fix.keys()) / total_b_muts
+	prob_of_loss = len(time_to_loss.keys()) / total_b_muts
+	list_p_fix.append(prob_of_fix)
+	list_p_loss.append(prob_of_loss)
+
+list_p_loss
+list_p_fix
+
+import matplotlib.pyplot as plt
+# plot
+fig, ax = plt.subplots(figsize=(8, 6))
+x, y = diff_s, list_p_fix
+ax.plot(x, y, label='Probability of fixation')
+x, y = diff_s, list_p_loss
+ax.plot(x, y, label='Probability of loss')
+# legend and grid
+ax.grid(alpha=0.3)
+ax.legend()
+# axis and title
+ax.set_title('Probability of fixation and loss')
+ax.set_xlabel('Selection Coefficient')
+ax.set_ylabel('Probability')
+fig.tight_layout()
+fig.savefig('Probability of fixation and loss.png', dpi=300, transparent=True)
+exit()
 
 # ================================================
 # Plot by matplotlib
@@ -213,196 +268,24 @@ ax.set_title(f'Population of {n} Individual {u} Sites, Mutation Rate {v}, {g} Ge
 ax.set_xlabel('Generation')
 ax.set_ylabel('Number of Segregating Mutations')
 fig.tight_layout()
-fig.savefig('Number of Mutations Segregating30.png', dpi=300, transparent=True)
+fig.savefig('Number of Mutations Segregating40.png', dpi=300, transparent=True)
 # fig.savefig('filename.pdf', transparent=True)
 # fig.savefig('filename.svg', transparent=True)
 exit()
 
 # ================================================
-# Plot by plotly
-# ================================================
-import plotly.graph_objects as go
-from plotly.offline import iplot, plot
-
-fig = go.Figure()
-# data to plot
-x, y, labels = list(range(g)), mutation_seg, [f'Generation: {i}<br>Mutation: {j}' for i,j in zip(range(g), mutation_seg)]
-fig.add_trace(go.Scatter(x=x, y=y,
-    mode='markers+lines', name='Number of Segregating Mutations',
-	text=labels,
-    # line=dict(width=1),
-	marker=dict(size=2.5),
-	))
-# add figure layout
-fig.update_layout(
-    title=dict(
-        text=f'Population of {n} Individual {u} Sites, Mutation Rate {v}',
-        x=0.5, y=0.9,
-        xanchor='center', yanchor='top',
-        font=dict(size=15),
-        ),
-    xaxis=dict(
-        title='Generation',
-        # range=[0, g]
-        ),
-    yaxis=dict(
-        title='Number of Segregating Mutations',
-        # range=[min, max],
-        ),
-    width=1000,
-    height=600,
-    showlegend=True,
-    )
-iplot(fig)
-plot(fig, filename='plotly_segregating_mutation3.html')
-
-
-# print(new_off)
-# mutation_seg
-# print(mutation/g)
-
-
-# ================================================
-# test
-# ================================================
-# a = np.random.randint(0, 5, size=(10, 2))
-# a
-# a
-# ben_cols = a[:, 2:]
-# ben_cols
-# row, col  = check_beneficial_mutation(a, 2)
-# row, col
-# row != 'NAN'
-# a = np.column_stack((a, np.ones(10), np.zeros(10)))
-# a
-# a[3][1] = 1
-# a
-# b = a!=0
-# b
-# 
-# ben_cols = a[:, 2:] 
-# ben_cols
-# 
-# check_matrix = ben_cols != 0 # if the site not equal to zero, return True; else ruturn False
-# check_matrix
-# 
-# check_sum = np.sum(check_matrix, axis=0)
-# check_sum
-# # check_sum = np.sum(check_matrix, axis=0) # count number of True for each columns (beneficial mutation)
-# fix_col = np.where(check_sum==10)[0]  # fixation 
-# los_col = np.where(check_sum==0)[0]
-# fix_col
-# los_col
-# 
-# np.arange(0)[check_sum==10]
-# np.arange(1)
-# np.arange(2)
-# 
-# check_sum = np.array([1, 2, 9, 0])
-# rows = np.where(check_sum==10)[0]
-# rows
-#
-
-
-# a  = np.random.randint(0,10, size = (10,2))
-# a
-# new_position = np.ones(10, dtype = int)
-# new_position
-# b = np.zeros(10)
-# b[2] = 1
-# new_population = np.column_stack((a,np.ones(10),np.zeros(10),b)) # add a new column for a beneficial mutation
-# new_population
-# # num_muts = np.random.poisson(v*n*(u+b))
-# # add_ben_population = add_new_mutation(new_population, n, u+b, num_muts)
-# p = np.ones(10)
-# p
-# ben_cols = new_population[:, 2:]
-# ben_cols
-# rows, _ = np.where(ben_cols!=0)
-# rows
-# rows, occurrence = np.unique(rows, return_counts=True)
-# rows, occurrence
-# p[rows] *= [(1+0.2)**i for i in occurrence]
-# p
-# # 1.3 normalization (to sum up to 1)
-# p = p / np.sum(p)
-# p
-# np.random.choice(np.arange(10), size = 10, p = p)
-# np.random.choice(np.arange(10), size = 10)
-# new_offspring(new_population, 10, 2, 0.2)
-# new_population[new_offspring(new_population, 10, 2, 0.2)]
-# parents
-# new_offspring = new_population[parents]
-# new_offspring
-# p = np.ones(10)
-
-# a = np.random.poisson(v*n*u)
-# if a != 0:
-# 	print(a)
-# 
-# np.where(a == 0)
-# np.random.randint(0, 10)
-# row= np.random.randint(0, n, size = a)
-# row
-# col = np.random.randint(0, u, size = a)
-# col
-# population = np.zeros([n, u], dtype=int)
-# population
-# for i in range(a):
-# 	population[row[i]][col[i]] += 1
-# population
-# a = np.random.randint(5, size=(10,5 ))
-# a
-# a != 0
-# np.sum(a!=0, axis=None)
-# mutation_num = np.random.poisson(1, 10)
-# mutation_num
-# np.random.seed = 123
-# a = np.random.randint(10, size=(10, 5))
-# a
-# check_site(a, 5) is None
-# a
-# _, col = np.where(a == 0)
-# index = set(range(5)) - set(col)
-#
-#
-# row_index, col_index = np.where(a == 0)
-# row_index
-# i = set(range(5)) - set(col_index)
-# i
-# len(i)
-# for c in i:
-# 	a[:, c] = 0
-# a
-# a[:, [0, 2, 4]] = 0
-# a
-
-# p = np.random.random()
-# p
-# s = select_paraents(n)
-# s
-# new_pop = population[s]
-# new_pop
-# np.random.seed=1
-# t = np.random.randint(0, 5, [5, 3])
-# t
-# np.sum(t, axis=0)
-# mutation_num = np.random.poisson(1,10)
-# mutation_num
-# np.sum(mutation_num)
-# a = np.random.randint(0, 10, size = 3)
-# a
-# s = np.zeros([10,2], dtype = int)
-# s
-# len(a)
-# s
-# a
-# s[a]
-# a[0]
-# for i in range(len(a)):
-# 	print(i)
-# 	s[a[i]][0] = '1'
-
-# ================================================
 # end
 # ================================================
+
+
+# print(b)
+# print(time_to_fix)
+# print(time_to_loss)
+# mean_time_fix = sum(time_to_fix.values()) / len(time_to_fix.keys())
+# mean_time_loss = sum(time_to_loss.values()) / len(time_to_loss.keys())
+# print(mean_time_fix)
+# print(mean_time_loss)
+# prob_of_fix = len(time_to_fix.keys()) / total_b_muts
+# prob_of_loss = len(time_to_loss.keys()) / total_b_muts
+# print(prob_of_fix)
+# print(prob_of_loss)
