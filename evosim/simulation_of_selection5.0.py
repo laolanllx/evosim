@@ -7,15 +7,15 @@ import matplotlib.pyplot as plt
 # Neutral selection simulation
 # ================================================
 
-# Object-oriented language 
+# Object-oriented language
 class Population:
-	def __init__(self, n, u, v):
+	def __init__(self, n: int, u: int, v: float):
 		"""
 		Create a new population with n individuals and u mutation sites
 		Mutation rate of v
 		:param n: (int) number of individuals in a population
 		:param u:
-		:param v: 
+		:param v:
 		"""
 		self.population = np.zeros([n, u], dtype=int)
 		self.n = n
@@ -33,7 +33,7 @@ class Population:
 		return self._v
 
 	@v.setter
-	def v(self, v):
+	def v(self, v: float):
 		try:
 			assert 0 <= v <=1
 			self._v = v
@@ -44,65 +44,95 @@ class Population:
 class NeutralSelectionSimulator(Population):
 	def __init__(self, n, u, v, g):
 		super(NeutralSelectionSimulator, self).__init__(n, u, v)
-		self.num_generation = g
+		self.g = g
+		self.fixation_count = 0
+		self.mutation_count = 0
+		self.fixation_timepoint = []
+		self.loss_timepoint = []
+		self.segregating_mutation = []
 
-	def select_parents(self):
-		return np.random.randint(0, self.n, size=self.n)
+	@property
+	def g(self):
+		return self._g
 
+	@g.setter
+	def g(self, g):
+		self._g = g
 
-p1 = NeutralSelectionSimulator(1000, 10, 0.01, 100 * 1000)
-p1_offspring = p1.select_parents()
+	def get_mutations(self):
+		return np.random.poisson(self.v * self.n * self.u)
 
+	def update_population(self):
+		parents = np.random.randint(0, self.n, size=self.n)
+		self.population = self.population[parents]
 
-# ================================================
-# Functions
-# ================================================
-def select_paraents(n):
-	"""
-	Args:
-		n: (int) number of individuals in the population
-	Returns:
-		array: indexs for offsprin
-	"""
-	# randomly select n individuals as offsprings in next generation
-	return np.random.randint(0, n, size=n)
+	def add_new_mutation(self, num_mutations, verbose=False):
+		# randomly select which individual and which position has mutation
+		row = np.random.randint(0, self.n, size=num_mutations)  # list of row indexs
+		col = np.random.randint(0, self.u, size=num_mutations)  # list of column indexs
+		# Fancy Indexing
+		self.population[row, col] += 1
+		if verbose:
+			self.__repr__()
 
+	def check_fixation(self):
+		"""
+		In a simulation
+		1. Detect any mutation sites that become fixed
+		2. Update number of fixation i.e. self.fixation
 
-def add_new_mutation(population, n, u, nummuts):
-	"""
-	Args:
-		population: (numpy.ndarray) shape n*u, n individuals and u sites
-		n: (int) number of individuals in the population
-		u: (int) number of sites subject to mutations in each individual
-	Returns:
-		population: (numpy.ndarray)
-	"""
-	# randomly select which individual and which position has mutation
-	row = np.random.randint(0, n, size=nummuts)  # list of row indexs
-	col = np.random.randint(0, u, size=nummuts)  # list of column indexs
-	# Fancy Indexing
-	population[row, col] += 1
-	return population
+		:return:
+		"""
+		_, col = np.where(self.population == 0)  # find columns that contain 0 i.e. no mutation
+		if col.size > 0:
+			idx = set(range(self.u)) - set(col)  #  find columns that do not contain 0
+			if len(idx) > 0:
+				self.fixation_count += len(idx)
+				self.population[:, list(idx)] = 0  # convert sites that has become fixed to 0
+				return True
+			return False
+		return False
 
+	def simulate_neutral_selection(self):
+		i = 1
+		while i <= self.g:
+			self.update_population()
+			nummuts = self.get_mutations()
+			self.mutation_count += nummuts
 
-def check_site(population, u, fixnum):
-	"""
-	Args:
-		population: (numpy.ndarray) shape n*u, n individuals and u sites
-	Returns:
-		population: (numpy.ndarray) shape n*u, n individuals and u sites
-		fixnum: number of mutaiton got fixed
-		index: index of fixed columns
-	"""
-	_, col = np.where(population == 0)  # find columns that contain 0 i.e. no mutation
-	if col.size > 0:
-		index = set(range(u)) - set(col)  #  find columns that do not contain 0
-		index = list(index)  #  convert set to list
-		if len(index) > 0:
-			fixnum += len(index)
-		population[:, index] = 0  # convert sites that has become fixed to 0
-	return population, fixnum, index
+			# if new mutation, add it to population
+			if nummuts != 0:
+				self.add_new_mutation(nummuts)
 
+			# check fixation
+			r = self.check_fixation()
+			if r:
+				self.fixation_timepoint.append(i)
+
+			num = np.sum(self.population != 0, axis=None)  # calculate the number of sites carrying mutations
+			self.segregating_mutation.append(num)
+			i += 1
+
+	def plot_segregating_mutation_generation(self, savefig=False):
+		fig, ax = plt.subplots(figsize=(8, 6))
+		x, y = range(self.g), self.segregating_mutation
+		ax.plot(x, y, label='Number of Segregating Mutations')
+		# legend and grid
+		ax.grid(alpha=0.3)
+		ax.legend()
+		# axis and title
+		ax.set_title(f'Population of {self.n} Individual {self.u} Sites, Mutation Rate {self.v}, {self.g} Generations')
+		ax.set_xlabel('Generation')
+		ax.set_ylabel('Number of Segregating Mutations')
+		fig.tight_layout()
+		if savefig:
+			fig.savefig('Number of Mutations Segregating30.png', dpi=300, transparent=True)
+
+n, u, v = 100, 10, 0.01
+g = 1000*n
+p1 = NeutralSelectionSimulator(n, u, v, g)
+p1.simulate_neutral_selection()
+p1.plot_segregating_mutation_generation(savefig=False)
 
 # ================================================
 
@@ -114,52 +144,52 @@ def check_site(population, u, fixnum):
 #    then expected number of mutations in population each generation will be v*N*u
 # ================================================
 
-n, u = 100, 10
-g = 100 * n
-v = 0.001
+# n, u = 100, 10
+# g = 100 * n
+# v = 0.001
+#
+# # create a n*u array, each row is one individual, each column is one site for each mutation
+# population = np.zeros([n, u], dtype=int)
+# # population
+# # run for g times as g gerations
+# i = 1
+# mutation_seg = []  # a list of number of sites carrying mutations over g generations
+# totalmuts = 0
+# fix_num = 0
+# time = []
+#
+# while i <= g:
+# 	offspring = population[select_paraents(n)]
+# 	# nummuts = np.random.randint(v*n*u)
+# 	nummuts = np.random.poisson(v * n * u)  # expected number of mutations in population each generation
+# 	totalmuts += nummuts
+# 	# for i in range(nummuts):
+# 	if nummuts != 0:
+# 		new_off = add_new_mutation(offspring, n, u, nummuts)
+# 		population, fix_num, index = check_site(new_off, u, fix_num)
+# 		if len(index) > 0:
+# 			time.append(i)
+# 	# else:
+# 	# 	time.append(0)
+# 	else:
+# 		population, fix_num, index = check_site(offspring, u, fix_num)
+# 		if len(index) > 0:
+# 			time.append(i)
+# 	# else:
+# 	# 	time.append(0)
+# 	mutation = np.sum(population != 0, axis=None)  # calculate the number of sites carrying mutations
+# 	mutation_seg.append(mutation)
+# 	i += 1
 
-# create a n*u array, each row is one individual, each column is one site for each mutation
-population = np.zeros([n, u], dtype=int)
+# len(time)
+# np.sum(time) / fix_num
+#
+# totalmuts
+# fix_num / g
+# fix_num / totalmuts
 # population
-# run for g times as g gerations
-i = 1
-mutation_seg = []  # a list of number of sites carrying mutations over g generations
-totalmuts = 0
-fix_num = 0
-time = []
-
-while i <= g:
-	offspring = population[select_paraents(n)]
-	# nummuts = np.random.randint(v*n*u)
-	nummuts = np.random.poisson(v * n * u)  # expected number of mutations in population each generation
-	totalmuts += nummuts
-	# for i in range(nummuts):
-	if nummuts != 0:
-		new_off = add_new_mutation(offspring, n, u, nummuts)
-		population, fix_num, index = check_site(new_off, u, fix_num)
-		if len(index) > 0:
-			time.append(i)
-	# else:
-	# 	time.append(0)
-	else:
-		population, fix_num, index = check_site(offspring, u, fix_num)
-		if len(index) > 0:
-			time.append(i)
-	# else:
-	# 	time.append(0)
-	mutation = np.sum(population != 0, axis=None)  # calculate the number of sites carrying mutations
-	mutation_seg.append(mutation)
-	i += 1
-
-len(time)
-np.sum(time) / fix_num
-
-totalmuts
-fix_num / g
-fix_num / totalmuts
-population
-1 / (n * 2)
-1 / n
+# 1 / (n * 2)
+# 1 / n
 
 
 # ================================================
