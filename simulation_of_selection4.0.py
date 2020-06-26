@@ -99,15 +99,10 @@ while i <= g:
 	mutation_seg.append(mutation)
 	i += 1
 
-len(time)
-np.sum(time)/fix_num
 
-totalmuts
-fix_num/g
-fix_num/totalmuts
-population
-1/(n*2)
-1/n
+print('Mean time to fixation: ', np.sum(time)/fix_num)
+print('Probability of fixation in neutral selection: ', fix_num/totalmuts)
+
 
 # ================================================
 # Part 2
@@ -188,8 +183,9 @@ def check_beneficial_mutation(population, u):
 diff_s = np.array([0.01, 0.05, 0.1, 0.5, 0.8, 1, 2])
 diff_s
 
-list_p_fix = []
-list_p_loss = []
+list_p_fix = [] # list of probability of fixation among different selection coefficients
+list_p_loss = [] # list of probability of loss among different selection coefficients
+
 for s in diff_s:
 	# 1. add first beneficial mutation
 	# 1.1 # add a new column for the first beneficial mutation site
@@ -198,9 +194,9 @@ for s in diff_s:
 	pop = np.column_stack((population, first_beneficial_site))
 	b = 1 # number of total beneficial mutations
 	j = 1
-	time_to_fix = {}
-	time_to_loss = {}
-	total_b_muts = 0
+	time_to_fix = {} # key is b; value is time to get fixed
+	time_to_loss = {} # key is b; value is time to get lost
+	total_b_muts = 0 # total number of beneficial mutations happened
 	while j <= g:
 		# 1.3 add mutations;
 		num_muts = np.random.poisson(v*n*(u+b)) # expected number of mutations in population each generation
@@ -226,13 +222,11 @@ for s in diff_s:
 			pop = np.column_stack((pop, new_beneficial_site))
 			b += 1
 		j += 1
-	prob_of_fix = len(time_to_fix.keys()) / total_b_muts
-	prob_of_loss = len(time_to_loss.keys()) / total_b_muts
+	prob_of_fix = len(time_to_fix.keys()) / (len(time_to_fix.keys()) + len(time_to_loss.keys()))
+	prob_of_loss = len(time_to_loss.keys()) / (len(time_to_fix.keys()) + len(time_to_loss.keys()))
 	list_p_fix.append(prob_of_fix)
 	list_p_loss.append(prob_of_loss)
 
-list_p_loss
-list_p_fix
 
 import matplotlib.pyplot as plt
 # plot
